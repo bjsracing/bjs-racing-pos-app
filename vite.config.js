@@ -12,4 +12,6 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 3000,
   },
+  // TAMBAH BARIS INI:
+  base: '/', // Ini memberitahu Vite bahwa aplikasi di-deploy di root path
 });
