@@ -1,0 +1,15 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Anda bisa menambahkan CSS global kustom di sini di masa mendatang */
+/* Misalnya, untuk reset margin/padding universal atau font-family */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box; /* Untuk model box-sizing yang konsisten */
+  /* overflow: hidden; * (Hanya jika Anda ingin mencegah scrolling global) */
+}
