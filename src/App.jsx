@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom"; // Import createPortal langsung
 import { supabase } from "./lib/supabase";
 import {
     ShoppingCart,
@@ -14,8 +15,8 @@ import {
     X,
 } from "lucide-react";
 
-// --- ProductFormModal Component (DEFINED OUTSIDE the main App component) ---
-function ProductFormModal({ product, categories, suppliers, onSave, onClose }) {
+// --- ProductModal Component (Using Modal in its name for clarity, but it's a pop-up) ---
+function ProductModal({ product, categories, suppliers, onSave, onClose }) {
     const [formData, setFormData] = useState({
         name: "",
         sku: "",
@@ -32,21 +33,19 @@ function ProductFormModal({ product, categories, suppliers, onSave, onClose }) {
 
     useEffect(() => {
         if (product) {
-            // Set form data when editing an existing product
             setFormData({
                 name: product.name || "",
                 sku: product.sku || "",
                 barcode: product.barcode || "",
-                category_id: product.category_id || "", // Ensure it's ID
-                buy_price: product.buy_price || 0, // Default to 0 for numbers
+                category_id: product.category_id || "",
+                buy_price: product.buy_price || 0,
                 sell_price: product.sell_price || 0,
                 stock: product.stock || 0,
                 min_stock: product.min_stock || 0,
-                supplier_id: product.supplier_id || "", // Ensure it's ID
-                is_active: product.is_active, // boolean, directly assign or default to false
+                supplier_id: product.supplier_id || "",
+                is_active: product.is_active,
             });
         } else {
-            // Reset form for new product
             setFormData({
                 name: "",
                 sku: "",
@@ -60,7 +59,7 @@ function ProductFormModal({ product, categories, suppliers, onSave, onClose }) {
                 is_active: true,
             });
         }
-        setErrors({}); // Clear errors when modal opens/changes product
+        setErrors({});
     }, [product]);
 
     const handleChange = (e) => {
@@ -118,6 +117,7 @@ function ProductFormModal({ product, categories, suppliers, onSave, onClose }) {
         onSave(parsedData, product ? product.id : null);
     };
 
+    // Return the modal content
     return (
         // Menggunakan Tailwind classes untuk fixed position dan z-index tinggi
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex justify-center items-center">
@@ -346,8 +346,6 @@ function ProductFormModal({ product, categories, suppliers, onSave, onClose }) {
                         </label>
                     </div>
                     <div className="flex justify-end space-x-3 mt-6">
-                        {" "}
-                        {/* Margin top for buttons */}
                         <button
                             type="button"
                             onClick={onClose}
@@ -373,7 +371,7 @@ function App() {
     const [activeTab, setActiveTab] = useState("dashboard");
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [suppliers, setSuppliers] = useState([]); // New state for suppliers
+    const [suppliers, setSuppliers] = useState([]);
     const [cart, setCart] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("");
@@ -386,8 +384,20 @@ function App() {
     const [lowStockProducts, setLowStockProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const [isProductFormOpen, setIsProductFormOpen] = useState(false); // New state for modal visibility
-    const [editingProduct, setEditingProduct] = useState(null); // New state for product being edited
+    const [isProductFormOpen, setIsProductFormOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
+
+    // Effect to manage body scroll based on modal state
+    useEffect(() => {
+        if (isProductFormOpen) {
+            document.body.classList.add("modal-open");
+        } else {
+            document.body.classList.remove("modal-open");
+        }
+        return () => {
+            document.body.classList.remove("modal-open");
+        };
+    }, [isProductFormOpen]);
 
     // Fetch all data on initial load
     useEffect(() => {
@@ -405,12 +415,11 @@ function App() {
             await Promise.all([
                 fetchProducts(),
                 fetchCategories(),
-                fetchSuppliers(), // Fetch suppliers
+                fetchSuppliers(),
                 fetchStats(),
             ]);
         } catch (error) {
             console.error("Error fetching all data:", error);
-            // Optionally, show a user-friendly error message
         }
         setLoading(false);
     };
@@ -443,7 +452,6 @@ function App() {
             console.log("Products loaded:", data?.length || 0);
         } catch (error) {
             console.error("Error fetching products:", error);
-            // Handle error, e.g., display a message to the user
         }
     };
 
@@ -481,32 +489,29 @@ function App() {
 
     const fetchStats = async () => {
         try {
-            // Get all ACTIVE products for statistics
             const { data: allActiveProducts, error: productsError } =
                 await supabase
                     .from("products")
                     .select("id, stock, min_stock")
-                    .eq("is_active", true); // Only count active products for dashboard stats
+                    .eq("is_active", true);
 
             if (productsError) throw productsError;
 
-            // Get all ACTIVE categories for statistics
             const { data: allActiveCategories, error: categoriesError } =
                 await supabase
                     .from("categories")
                     .select("id")
-                    .eq("is_active", true); // Only count active categories
+                    .eq("is_active", true);
 
             if (categoriesError) throw categoriesError;
 
-            // Filter low stock products from active products
             const lowStockItems =
                 allActiveProducts?.filter(
                     (product) => product.stock <= product.min_stock,
                 ) || [];
 
             setStats((prev) => ({
-                ...prev, // Keep cartItems from previous state
+                ...prev,
                 totalProducts: allActiveProducts?.length || 0,
                 totalCategories: allActiveCategories?.length || 0,
                 lowStock: lowStockItems.length,
@@ -525,10 +530,11 @@ function App() {
 
     // Cart functions
     const addToCart = (product) => {
-        // Ensure product is active before adding to cart
         if (!product.is_active) {
             alert(
-                `Produk ${product.name} tidak aktif dan tidak bisa ditambahkan ke keranjang.`,
+                "Produk " +
+                    product.name +
+                    " tidak aktif dan tidak bisa ditambahkan ke keranjang.",
             );
             return;
         }
@@ -540,7 +546,11 @@ function App() {
             const existingItem = cart[existingItemIndex];
             if (existingItem.quantity + 1 > product.stock) {
                 alert(
-                    `Stok untuk ${product.name} tidak mencukupi. Hanya tersedia ${product.stock} unit.`,
+                    "Stok untuk " +
+                        product.name +
+                        " tidak mencukupi. Hanya tersedia " +
+                        product.stock +
+                        " unit.",
                 );
                 return;
             }
@@ -552,7 +562,7 @@ function App() {
             setCart(updatedCart);
         } else {
             if (product.stock === 0) {
-                alert(`Stok untuk ${product.name} habis.`);
+                alert("Stok untuk " + product.name + " habis.");
                 return;
             }
             setCart([...cart, { ...product, quantity: 1 }]);
@@ -575,7 +585,11 @@ function App() {
             setCart(cart.filter((item) => item.id !== productId));
         } else if (newQuantity > originalProduct.stock) {
             alert(
-                `Stok untuk ${originalProduct.name} hanya ${originalProduct.stock}.`,
+                "Stok untuk " +
+                    originalProduct.name +
+                    " hanya " +
+                    originalProduct.stock +
+                    ".",
             );
             const updatedCart = [...cart];
             updatedCart[productInCartIndex] = {
@@ -618,7 +632,7 @@ function App() {
             selectedCategory === "" ||
             product.category_id.toString() === selectedCategory;
 
-        return product.is_active && matchesSearch && matchesCategory; // Only show active products in POS
+        return product.is_active && matchesSearch && matchesCategory;
     });
 
     // Format currency
@@ -638,19 +652,18 @@ function App() {
         }
 
         try {
-            // Create transaction
             const { data: transaction, error: transactionError } =
                 await supabase
                     .from("transaction")
                     .insert([
                         {
-                            transaction_code: `TRX-${Date.now()}`,
+                            transaction_code: "TRX-" + Date.now(),
                             customer_name: paymentData.customerName || "Guest",
                             total_amount: getTotalAmount(),
                             payment_method: paymentData.method,
                             payment_amount: paymentData.amount,
                             change_amount: paymentData.change,
-                            discount_amount: 0, // Placeholder for now, will be dynamic
+                            discount_amount: 0,
                             status: "completed",
                         },
                     ])
@@ -659,7 +672,6 @@ function App() {
 
             if (transactionError) throw transactionError;
 
-            // Create transaction items
             const transactionItems = cart.map((item) => ({
                 transaction_id: transaction.id,
                 product_id: item.id,
@@ -674,7 +686,6 @@ function App() {
 
             if (itemsError) throw itemsError;
 
-            // Update product stock
             for (const item of cart) {
                 const { error: stockError } = await supabase
                     .from("products")
@@ -684,9 +695,8 @@ function App() {
                 if (stockError) throw stockError;
             }
 
-            // Clear cart and refresh data
             clearCart();
-            await fetchAllData(); // Re-fetch all data to update stats and product list
+            await fetchAllData();
 
             alert("Transaksi berhasil diproses!");
             return true;
@@ -713,14 +723,12 @@ function App() {
         try {
             let error;
             if (id) {
-                // Update existing product
                 const { error: updateError } = await supabase
                     .from("products")
                     .update(productData)
                     .eq("id", id);
                 error = updateError;
             } else {
-                // Insert new product
                 const { error: insertError } = await supabase
                     .from("products")
                     .insert([productData]);
@@ -729,12 +737,14 @@ function App() {
 
             if (error) throw error;
 
-            alert(`Produk berhasil ${id ? "diperbarui" : "ditambahkan"}!`);
+            alert(
+                "Produk berhasil " + (id ? "diperbarui" : "ditambahkan") + "!",
+            );
             closeProductForm();
-            await fetchAllData(); // Refresh all data including products
+            await fetchAllData();
         } catch (error) {
             console.error("Error saving product:", error);
-            alert(`Gagal menyimpan produk: ${error.message}`);
+            alert("Gagal menyimpan produk: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -743,12 +753,13 @@ function App() {
     const deleteProduct = async (productId, productName) => {
         if (
             window.confirm(
-                `Apakah Anda yakin ingin menghapus produk "${productName}"? (Ini akan menonaktifkan produk, tidak menghapusnya secara permanen)`,
+                'Apakah Anda yakin ingin menghapus produk "' +
+                    productName +
+                    '"? (Ini akan menonaktifkan produk, tidak menghapusnya secara permanen)',
             )
         ) {
             setLoading(true);
             try {
-                // Soft delete: update is_active to false
                 const { error } = await supabase
                     .from("products")
                     .update({ is_active: false })
@@ -756,11 +767,11 @@ function App() {
 
                 if (error) throw error;
 
-                alert(`Produk "${productName}" berhasil dinonaktifkan.`);
-                await fetchAllData(); // Refresh list
+                alert('Produk "' + productName + '" berhasil dinonaktifkan.');
+                await fetchAllData();
             } catch (error) {
                 console.error("Error deleting product:", error);
-                alert(`Gagal menghapus produk: ${error.message}`);
+                alert("Gagal menghapus produk: " + error.message);
             } finally {
                 setLoading(false);
             }
@@ -926,8 +937,6 @@ function App() {
 
                 {activeTab === "pos" && (
                     <div className="space-y-6">
-                        {" "}
-                        {/* Removed grid cols to make it vertical stack */}
                         {/* Search and Category Filter Section */}
                         <div className="flex flex-col sm:flex-row gap-4 mb-6">
                             <div className="flex-1">
@@ -964,10 +973,122 @@ function App() {
                                 ))}
                             </select>
                         </div>
-                        {/* Product Grid Section */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+
+                        {/* Cart Section - Moved to below filters */}
+                        <div className="bg-white rounded-lg shadow p-6 mb-6">
                             {" "}
                             {/* Added margin bottom */}
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-medium text-gray-900">
+                                    Keranjang
+                                </h3>
+                                {cart.length > 0 && (
+                                    // Proses Pembayaran button moved here
+                                    <button
+                                        onClick={() => {
+                                            const paymentData = {
+                                                method: "Tunai",
+                                                amount: getTotalAmount(),
+                                                change: 0,
+                                                customerName: "Guest",
+                                            };
+                                            processPayment(paymentData);
+                                        }}
+                                        className="bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 mr-2" // Added mr-2 for margin
+                                    >
+                                        Proses Pembayaran
+                                    </button>
+                                )}
+                                {cart.length > 0 && (
+                                    <button
+                                        onClick={clearCart}
+                                        className="text-red-600 hover:text-red-700 text-sm"
+                                    >
+                                        Clear All
+                                    </button>
+                                )}
+                            </div>
+                            {cart.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                                    <p className="text-gray-500">
+                                        Keranjang kosong
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {cart.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
+                                        >
+                                            <div className="flex-1">
+                                                <h4 className="font-medium text-gray-900 text-sm">
+                                                    {item.name}
+                                                </h4>
+                                                <p className="text-sm text-gray-600">
+                                                    {formatCurrency(
+                                                        item.sell_price,
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() =>
+                                                        updateCartQuantity(
+                                                            item.id,
+                                                            item.quantity - 1,
+                                                        )
+                                                    }
+                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
+                                                >
+                                                    <Minus className="h-3 w-3" />
+                                                </button>
+                                                <span className="w-8 text-center text-sm">
+                                                    {item.quantity}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        updateCartQuantity(
+                                                            item.id,
+                                                            item.quantity + 1,
+                                                        )
+                                                    }
+                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
+                                                >
+                                                    <Plus className="h-3 w-3" />
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        removeFromCart(item.id)
+                                                    }
+                                                    className="p-1 rounded-full bg-red-200 hover:bg-red-300 ml-2"
+                                                >
+                                                    <Trash2 className="h-3 w-3 text-red-600" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div className="border-t pt-4">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <span className="text-lg font-medium text-gray-900">
+                                                Total:
+                                            </span>
+                                            <span className="text-xl font-bold text-green-600">
+                                                {formatCurrency(
+                                                    getTotalAmount(),
+                                                )}
+                                            </span>
+                                        </div>
+                                        {/* Original Proses Pembayaran button was here, now moved above Clear All */}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Product Grid Section */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {filteredProducts.map((product) => {
                                 const itemInCart = cart.find(
                                     (item) => item.id === product.id,
@@ -1057,6 +1178,7 @@ function App() {
                                 );
                             })}
                         </div>
+
                         {filteredProducts.length === 0 && (
                             <div className="text-center py-8">
                                 <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -1065,114 +1187,6 @@ function App() {
                                 </p>
                             </div>
                         )}
-                        {/* Cart Section - Moved to below products */}
-                        <div className="bg-white rounded-lg shadow p-6 mt-6">
-                            {" "}
-                            {/* Added margin top */}
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-medium text-gray-900">
-                                    Keranjang
-                                </h3>
-                                {cart.length > 0 && (
-                                    <button
-                                        onClick={clearCart}
-                                        className="text-red-600 hover:text-red-700 text-sm"
-                                    >
-                                        Clear All
-                                    </button>
-                                )}
-                            </div>
-                            {cart.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                    <p className="text-gray-500">
-                                        Keranjang kosong
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {cart.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
-                                        >
-                                            <div className="flex-1">
-                                                <h4 className="font-medium text-gray-900 text-sm">
-                                                    {item.name}
-                                                </h4>
-                                                <p className="text-sm text-gray-600">
-                                                    {formatCurrency(
-                                                        item.sell_price,
-                                                    )}
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            item.id,
-                                                            item.quantity - 1,
-                                                        )
-                                                    }
-                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
-                                                >
-                                                    <Minus className="h-3 w-3" />
-                                                </button>
-                                                <span className="w-8 text-center text-sm">
-                                                    {item.quantity}
-                                                </span>
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            item.id,
-                                                            item.quantity + 1,
-                                                        )
-                                                    }
-                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
-                                                >
-                                                    <Plus className="h-3 w-3" />
-                                                </button>
-                                                <button
-                                                    onClick={() =>
-                                                        removeFromCart(item.id)
-                                                    }
-                                                    className="p-1 rounded-full bg-red-200 hover:bg-red-300 ml-2"
-                                                >
-                                                    <Trash2 className="h-3 w-3 text-red-600" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    <div className="border-t pt-4">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <span className="text-lg font-medium text-gray-900">
-                                                Total:
-                                            </span>
-                                            <span className="text-xl font-bold text-green-600">
-                                                {formatCurrency(
-                                                    getTotalAmount(),
-                                                )}
-                                            </span>
-                                        </div>
-                                        <button
-                                            onClick={() => {
-                                                const paymentData = {
-                                                    method: "Tunai",
-                                                    amount: getTotalAmount(),
-                                                    change: 0,
-                                                    customerName: "Guest",
-                                                };
-                                                processPayment(paymentData);
-                                            }}
-                                            className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700"
-                                        >
-                                            Proses Pembayaran
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
 
@@ -1183,7 +1197,7 @@ function App() {
                                 Manajemen Produk
                             </h2>
                             <button
-                                onClick={() => openProductForm()} // Open form for new product
+                                onClick={() => openProductForm()}
                                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
@@ -1325,15 +1339,20 @@ function App() {
                 )}
             </main>
 
-            {isProductFormOpen && (
-                <ProductFormModal
-                    product={editingProduct}
-                    categories={categories}
-                    suppliers={suppliers}
-                    onSave={saveProduct}
-                    onClose={closeProductForm}
-                />
-            )}
+            {/* Use createPortal to render modal outside the main App DOM hierarchy */}
+            {isProductFormOpen &&
+                activeTab === "produk" &&
+                createPortal(
+                    // Menggunakan createPortal langsung
+                    <ProductModal
+                        product={editingProduct}
+                        categories={categories}
+                        suppliers={suppliers}
+                        onSave={saveProduct}
+                        onClose={closeProductForm}
+                    />,
+                    document.body, // Render modal directly into the body
+                )}
         </div>
     );
 }

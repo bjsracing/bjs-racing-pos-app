@@ -1,15 +1,26 @@
 /* src/index.css */
+
+/* --- Tailwind CSS Directives --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Anda bisa menambahkan CSS global kustom di sini di masa mendatang */
-/* Misalnya, untuk reset margin/padding universal atau font-family */
+/* --- Global HTML/Body/Root Styling for Modal Compatibility --- */
+/* Ensure html, body, and #root take full height/width and don't restrict fixed positioning */
 html, body, #root {
   height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
-  box-sizing: border-box; /* Untuk model box-sizing yang konsisten */
-  /* overflow: hidden; * (Hanya jika Anda ingin mencegah scrolling global) */
+  box-sizing: border-box; /* Ensures consistent box model */
+  /* Remove any 'overflow' property here if it exists. 
+     'overflow: hidden' for the body will be controlled dynamically by JS for modals. */
+}
+
+/* --- Class added to <body> when a modal is open --- */
+/* This prevents the underlying page content from scrolling when the modal is active */
+body.modal-open {
+  overflow: hidden; /* Disable scrolling on the body */
+  /* Optional: Add a blur effect to the background content when modal is open */
+  /* filter: blur(2px); */ 
 }
