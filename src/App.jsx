@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom"; // Import createPortal langsung
+import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "./lib/supabase";
 import {
     ShoppingCart,
@@ -15,7 +15,7 @@ import {
     X,
 } from "lucide-react";
 
-// --- ProductModal Component (Using Modal in its name for clarity, but it's a pop-up) ---
+// --- Reusable ProductModal Component ---
 function ProductModal({ product, categories, suppliers, onSave, onClose }) {
     const [formData, setFormData] = useState({
         name: "",
@@ -31,7 +31,10 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
     });
     const [errors, setErrors] = useState({});
 
+    // Populate form data when product prop changes (for editing)
     useEffect(() => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("ProductModal: Product prop changed", product);
         if (product) {
             setFormData({
                 name: product.name || "",
@@ -46,6 +49,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                 is_active: product.is_active,
             });
         } else {
+            // Reset form for new product
             setFormData({
                 name: "",
                 sku: "",
@@ -59,9 +63,10 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                 is_active: true,
             });
         }
-        setErrors({});
+        setErrors({}); // Clear errors when modal opens/changes product
     }, [product]);
 
+    // Handle form input changes
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData((prev) => ({
@@ -70,6 +75,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
         }));
     };
 
+    // Validate form fields
     const validateForm = () => {
         const newErrors = {};
         if (!formData.name) newErrors.name = "Nama produk wajib diisi.";
@@ -96,6 +102,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
         return Object.keys(newErrors).length === 0;
     };
 
+    // Handle form submission
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!validateForm()) {
@@ -117,11 +124,11 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
         onSave(parsedData, product ? product.id : null);
     };
 
-    // Return the modal content
     return (
-        // Menggunakan Tailwind classes untuk fixed position dan z-index tinggi
+        // Fixed overlay for the modal
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex justify-center items-center">
-            <div className="relative p-8 bg-white rounded-lg shadow-xl max-w-lg w-full m-4">
+            {/* Modal content area */}
+            <div className="relative p-8 bg-white rounded-lg shadow-xl max-w-lg w-full m-4 opacity-100 transition-opacity duration-300">
                 <button
                     className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
                     onClick={onClose}
@@ -145,7 +152,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             id="name"
                             value={formData.name}
                             onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                         />
                         {errors.name && (
                             <p className="mt-1 text-sm text-red-600">
@@ -166,7 +173,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             id="sku"
                             value={formData.sku}
                             onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                         />
                         {errors.sku && (
                             <p className="mt-1 text-sm text-red-600">
@@ -187,7 +194,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             id="barcode"
                             value={formData.barcode}
                             onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                         />
                     </div>
                     <div>
@@ -202,7 +209,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             id="category_id"
                             value={formData.category_id}
                             onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                         >
                             <option value="">Pilih Kategori</option>
                             {categories.map((cat) => (
@@ -231,7 +238,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                                 id="buy_price"
                                 value={formData.buy_price}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                                 step="0.01"
                             />
                             {errors.buy_price && (
@@ -253,7 +260,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                                 id="sell_price"
                                 value={formData.sell_price}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                                 step="0.01"
                             />
                             {errors.sell_price && (
@@ -277,7 +284,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                                 id="stock"
                                 value={formData.stock}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                             />
                             {errors.stock && (
                                 <p className="mt-1 text-sm text-red-600">
@@ -298,7 +305,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                                 id="min_stock"
                                 value={formData.min_stock}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                             />
                             {errors.min_stock && (
                                 <p className="mt-1 text-sm text-red-600">
@@ -319,7 +326,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             id="supplier_id"
                             value={formData.supplier_id}
                             onChange={handleChange}
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                         >
                             <option value="">Pilih Supplier</option>
                             {suppliers.map((sup) => (
@@ -336,7 +343,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                             type="checkbox"
                             checked={formData.is_active}
                             onChange={handleChange}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
                         />
                         <label
                             htmlFor="is_active"
@@ -349,13 +356,13 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                         >
                             Batal
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                         >
                             {product ? "Simpan Perubahan" : "Tambah Produk"}
                         </button>
@@ -368,11 +375,12 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
 
 // --- Main App Component ---
 function App() {
+    // --- States ---
     const [activeTab, setActiveTab] = useState("dashboard");
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
-    const [cart, setCart] = useState([]);
+    const [cart, setCart] = useState([]); // Inisialisasi cart
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("");
     const [stats, setStats] = useState({
@@ -387,59 +395,34 @@ function App() {
     const [isProductFormOpen, setIsProductFormOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
 
-    // Effect to manage body scroll based on modal state
+    // --- Effects ---
+
+    // Effect to manage body scroll and background dimming based on modal state
     useEffect(() => {
         if (isProductFormOpen) {
             document.body.classList.add("modal-open");
+            document.body.style.overflow = "hidden";
         } else {
             document.body.classList.remove("modal-open");
+            document.body.style.overflow = "";
         }
         return () => {
             document.body.classList.remove("modal-open");
+            document.body.style.overflow = "";
         };
     }, [isProductFormOpen]);
 
-    // Fetch all data on initial load
-    useEffect(() => {
-        fetchAllData();
-    }, []);
-
-    // Effect to update cart items stat
-    useEffect(() => {
-        setStats((prev) => ({ ...prev, cartItems: cart.length }));
-    }, [cart]);
-
-    const fetchAllData = async () => {
-        setLoading(true);
-        try {
-            await Promise.all([
-                fetchProducts(),
-                fetchCategories(),
-                fetchSuppliers(),
-                fetchStats(),
-            ]);
-        } catch (error) {
-            console.error("Error fetching all data:", error);
-        }
-        setLoading(false);
-    };
-
-    const fetchProducts = async () => {
+    // Data Fetching Functions (NOT wrapped in useCallback anymore to simplify dependencies for fetchAllInitialData)
+    // They now return data directly and don't set state
+    const fetchProductsData = async () => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("--- DEBUG: fetchProductsData called ---");
         try {
             const { data, error } = await supabase
                 .from("products")
                 .select(
                     `
-                    id,
-                    name,
-                    sku,
-                    sell_price,
-                    stock,
-                    min_stock,
-                    buy_price,
-                    is_active,
-                    barcode,
-                    category_id,
+                    id, name, sku, sell_price, stock, min_stock, buy_price, is_active, barcode, category_id,
                     categories(name),
                     supplier_id,
                     suppliers(name)
@@ -448,14 +431,18 @@ function App() {
                 .order("name");
 
             if (error) throw error;
-            setProducts(data || []);
-            console.log("Products loaded:", data?.length || 0);
+            if (process.env.NODE_ENV !== "production")
+                console.log("--- DEBUG: Products Data fetched. ---");
+            return data;
         } catch (error) {
-            console.error("Error fetching products:", error);
+            console.error("--- DEBUG: Error fetching products data:", error);
+            throw error;
         }
     };
 
-    const fetchCategories = async () => {
+    const fetchCategoriesData = async () => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("--- DEBUG: fetchCategoriesData called ---");
         try {
             const { data, error } = await supabase
                 .from("categories")
@@ -464,14 +451,18 @@ function App() {
                 .order("name");
 
             if (error) throw error;
-            setCategories(data || []);
-            console.log("Categories loaded:", data?.length || 0);
+            if (process.env.NODE_ENV !== "production")
+                console.log("--- DEBUG: Categories Data fetched ---");
+            return data;
         } catch (error) {
-            console.error("Error fetching categories:", error);
+            console.error("--- DEBUG: Error fetching categories data:", error);
+            throw error;
         }
     };
 
-    const fetchSuppliers = async () => {
+    const fetchSuppliersData = async () => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("--- DEBUG: fetchSuppliersData called ---");
         try {
             const { data, error } = await supabase
                 .from("suppliers")
@@ -480,55 +471,103 @@ function App() {
                 .order("name");
 
             if (error) throw error;
-            setSuppliers(data || []);
-            console.log("Suppliers loaded:", data?.length || 0);
+            if (process.env.NODE_ENV !== "production")
+                console.log("--- DEBUG: Suppliers Data fetched ---");
+            return data;
         } catch (error) {
-            console.error("Error fetching suppliers:", error);
+            console.error("--- DEBUG: Error fetching suppliers data:", error);
+            throw error;
         }
     };
 
-    const fetchStats = async () => {
+    // fetchStatsData now takes fetched raw data as arguments and computes stats
+    const fetchStatsData = async (productsResult, categoriesResult) => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("--- DEBUG: fetchStatsData called ---");
         try {
-            const { data: allActiveProducts, error: productsError } =
-                await supabase
-                    .from("products")
-                    .select("id, stock, min_stock")
-                    .eq("is_active", true);
-
-            if (productsError) throw productsError;
-
-            const { data: allActiveCategories, error: categoriesError } =
-                await supabase
-                    .from("categories")
-                    .select("id")
-                    .eq("is_active", true);
-
-            if (categoriesError) throw categoriesError;
+            const allActiveProducts =
+                productsResult?.filter((product) => product.is_active) || [];
+            const allActiveCategories =
+                categoriesResult?.filter((category) => category.is_active) ||
+                [];
 
             const lowStockItems =
-                allActiveProducts?.filter(
+                allActiveProducts.filter(
                     (product) => product.stock <= product.min_stock,
                 ) || [];
 
             setStats((prev) => ({
                 ...prev,
-                totalProducts: allActiveProducts?.length || 0,
-                totalCategories: allActiveCategories?.length || 0,
+                totalProducts: allActiveProducts.length || 0,
+                totalCategories: allActiveCategories.length || 0,
                 lowStock: lowStockItems.length,
             }));
 
             setLowStockProducts(lowStockItems);
-            console.log("Stats updated:", {
-                products: allActiveProducts?.length || 0,
-                categories: allActiveCategories?.length || 0,
-                lowStock: lowStockItems.length,
-            });
+            if (process.env.NODE_ENV !== "production")
+                console.log("--- DEBUG: Stats updated. ---");
         } catch (error) {
-            console.error("Error fetching stats:", error);
+            console.error("--- DEBUG: Error fetching stats data:", error);
+            throw error;
         }
     };
 
-    // Cart functions
+    // Combined initial data fetching and state setting function (memoized with useCallback)
+    // This is the main function called by useEffect only once on mount
+    const fetchAndSetAllInitialData = useCallback(async () => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("--- DEBUG: fetchAndSetAllInitialData called ---");
+        setLoading(true);
+        try {
+            // Fetch all raw data in parallel
+            const [productsResult, categoriesResult, suppliersResult] =
+                await Promise.all([
+                    fetchProductsData(), // Call the async functions directly
+                    fetchCategoriesData(),
+                    fetchSuppliersData(),
+                ]);
+
+            // Set states ONLY ONCE after all data is fetched
+            setProducts(productsResult || []);
+            setCategories(categoriesResult || []);
+            setSuppliers(suppliersResult || []);
+
+            // Then calculate and set stats using the fresh data
+            await fetchStatsData(productsResult, categoriesResult); // Pass results to fetchStatsData
+
+            if (process.env.NODE_ENV !== "production")
+                console.log(
+                    "--- DEBUG: All initial data fetched and states set successfully. ---",
+                );
+        } catch (error) {
+            console.error(
+                "--- DEBUG: Error in fetchAndSetAllInitialData:",
+                error,
+            );
+        } finally {
+            setLoading(false);
+            if (process.env.NODE_ENV !== "production")
+                console.log(
+                    "--- DEBUG: Initial data fetch complete. Loading set to false. ---",
+                );
+        }
+    }, []); // CRITICAL: This useCallback now has an empty dependency array, making it stable.
+
+    // Initial data fetch on app load - this useEffect should only run once
+    useEffect(() => {
+        if (process.env.NODE_ENV !== "production")
+            console.log(
+                "--- DEBUG: Main App useEffect running (calling fetchAndSetAllInitialData) ---",
+            );
+        fetchAndSetAllInitialData();
+    }, [fetchAndSetAllInitialData]); // Dependency is the memoized fetchAndSetAllInitialData function
+
+    // Effect to update cart items count in header stats
+    useEffect(() => {
+        setStats((prev) => ({ ...prev, cartItems: cart.length }));
+    }, [cart]);
+
+    // --- Cart Functions (POS) ---
     const addToCart = (product) => {
         if (!product.is_active) {
             alert(
@@ -622,7 +661,7 @@ function App() {
         );
     };
 
-    // Filter products for POS display (only active products)
+    // --- POS Filter and Search Logic ---
     const filteredProducts = products.filter((product) => {
         const matchesSearch = searchTerm
             ? product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -635,7 +674,7 @@ function App() {
         return product.is_active && matchesSearch && matchesCategory;
     });
 
-    // Format currency
+    // --- Utility Functions ---
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat("id-ID", {
             style: "currency",
@@ -644,7 +683,7 @@ function App() {
         }).format(amount);
     };
 
-    // Process payment
+    // --- Transaction Processing ---
     const processPayment = async (paymentData) => {
         if (cart.length === 0) {
             alert("Keranjang belanja kosong. Silakan tambahkan produk.");
@@ -695,8 +734,8 @@ function App() {
                 if (stockError) throw stockError;
             }
 
-            clearCart();
-            await fetchAllData();
+            clearCart(); // Clear cart after successful transaction
+            await fetchAndSetAllInitialData(); // Re-fetch all data to update stats and product list
 
             alert("Transaksi berhasil diproses!");
             return true;
@@ -707,7 +746,7 @@ function App() {
         }
     };
 
-    // --- Product Form Handlers ---
+    // --- Product Management Handlers ---
     const openProductForm = (product = null) => {
         setEditingProduct(product);
         setIsProductFormOpen(true);
@@ -741,7 +780,7 @@ function App() {
                 "Produk berhasil " + (id ? "diperbarui" : "ditambahkan") + "!",
             );
             closeProductForm();
-            await fetchAllData();
+            await fetchAndSetAllInitialData();
         } catch (error) {
             console.error("Error saving product:", error);
             alert("Gagal menyimpan produk: " + error.message);
@@ -768,7 +807,7 @@ function App() {
                 if (error) throw error;
 
                 alert('Produk "' + productName + '" berhasil dinonaktifkan.');
-                await fetchAllData();
+                await fetchAndSetAllInitialData();
             } catch (error) {
                 console.error("Error deleting product:", error);
                 alert("Gagal menghapus produk: " + error.message);
@@ -778,53 +817,52 @@ function App() {
         }
     };
 
+    // --- Main App Render ---
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading BJS RACING POS...</p>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Memuat BJS RACING POS...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-gray-100 flex flex-col">
             {/* Header */}
-            <header className="bg-white shadow-sm border-b">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center py-4">
-                        <div className="flex items-center">
-                            <Package className="h-8 w-8 text-blue-600 mr-3" />
-                            <h1 className="text-2xl font-bold text-gray-900">
-                                BJS RACING POS
-                            </h1>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center bg-blue-100 px-3 py-1 rounded-full">
-                                <ShoppingCart className="h-4 w-4 text-blue-600 mr-1" />
-                                <span className="text-sm font-medium text-blue-600">
-                                    {stats.cartItems}
-                                </span>
-                            </div>
+            <header className="bg-white shadow-sm border-b border-orange-100 sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                    <div className="flex items-center">
+                        <Package className="h-8 w-8 text-orange-600 mr-3" />
+                        <h1 className="text-2xl font-extrabold text-gray-900">
+                            BJS RACING POS
+                        </h1>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                        <div className="flex items-center bg-orange-100 px-3 py-1 rounded-full">
+                            <ShoppingCart className="h-4 w-4 text-orange-600 mr-1" />
+                            <span className="text-sm font-semibold text-orange-600">
+                                {stats.cartItems}
+                            </span>
                         </div>
                     </div>
                 </div>
             </header>
 
             {/* Navigation */}
-            <nav className="bg-white shadow-sm">
+            <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-16 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex space-x-8">
                         {["dashboard", "pos", "produk"].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                                className={`py-3 px-1 border-b-3 font-medium text-base capitalize transition-colors duration-200 ease-in-out ${
                                     activeTab === tab
-                                        ? "border-blue-500 text-blue-600"
-                                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                        ? "border-orange-500 text-orange-600"
+                                        : "border-transparent text-gray-600 hover:text-orange-700 hover:border-orange-300"
                                 }`}
                             >
                                 {tab === "pos" ? "Point of Sale" : tab}
@@ -834,104 +872,103 @@ function App() {
                 </div>
             </nav>
 
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            {/* Main Content Area */}
+            {/* Apply styling to dim and disable interaction with background when modal is open */}
+            <main
+                className={`flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8 ${isProductFormOpen && activeTab === "produk" ? "opacity-30 pointer-events-none" : ""}`}
+            >
                 {activeTab === "dashboard" && (
                     <div className="space-y-6">
-                        <h2 className="text-3xl font-bold text-gray-900">
+                        <h2 className="text-3xl font-bold text-gray-800 mb-6">
                             Dashboard
                         </h2>
 
                         {/* Stats Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <div className="flex items-center">
-                                    <Package className="h-8 w-8 text-blue-600" />
-                                    <div className="ml-4">
-                                        <p className="text-sm font-medium text-gray-600">
-                                            Total Produk
-                                        </p>
-                                        <p className="text-2xl font-bold text-gray-900">
-                                            {stats.totalProducts}
-                                        </p>
-                                    </div>
+                            <div className="bg-white rounded-lg shadow-sm p-6 flex items-center space-x-4">
+                                <Package className="h-10 w-10 text-orange-600" />
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">
+                                        Total Produk
+                                    </p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {stats.totalProducts}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <div className="flex items-center">
-                                    <Users className="h-8 w-8 text-green-600" />
-                                    <div className="ml-4">
-                                        <p className="text-sm font-medium text-gray-600">
-                                            Kategori
-                                        </p>
-                                        <p className="text-2xl font-bold text-gray-900">
-                                            {stats.totalCategories}
-                                        </p>
-                                    </div>
+                            <div className="bg-white rounded-lg shadow-sm p-6 flex items-center space-x-4">
+                                <Users className="h-10 w-10 text-orange-600" />
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">
+                                        Total Kategori
+                                    </p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {stats.totalCategories}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <div className="flex items-center">
-                                    <TrendingDown className="h-8 w-8 text-red-600" />
-                                    <div className="ml-4">
-                                        <p className="text-sm font-medium text-gray-600">
-                                            Stok Rendah
-                                        </p>
-                                        <p className="text-2xl font-bold text-gray-900">
-                                            {stats.lowStock}
-                                        </p>
-                                    </div>
+                            <div className="bg-white rounded-lg shadow-sm p-6 flex items-center space-x-4">
+                                <TrendingDown className="h-10 w-10 text-red-600" />
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">
+                                        Produk Stok Rendah
+                                    </p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {stats.lowStock}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow p-6">
-                                <div className="flex items-center">
-                                    <ShoppingCart className="h-8 w-8 text-purple-600" />
-                                    <div className="ml-4">
-                                        <p className="text-sm font-medium text-gray-600">
-                                            Item di Keranjang
-                                        </p>
-                                        <p className="text-2xl font-bold text-gray-900">
-                                            {stats.cartItems}
-                                        </p>
-                                    </div>
+                            <div className="bg-white rounded-lg shadow-sm p-6 flex items-center space-x-4">
+                                <ShoppingCart className="h-10 w-10 text-orange-600" />
+                                <div>
+                                    <p className="text-sm font-medium text-gray-600">
+                                        Item di Keranjang
+                                    </p>
+                                    <p className="text-2xl font-bold text-gray-900">
+                                        {stats.cartItems}
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Low Stock Products */}
+                        {/* Low Stock Products List */}
                         {lowStockProducts.length > 0 && (
-                            <div className="bg-white rounded-lg shadow">
+                            <div className="bg-white rounded-lg shadow-sm">
                                 <div className="px-6 py-4 border-b border-gray-200">
-                                    <h3 className="text-lg font-medium text-gray-900">
+                                    <h3 className="text-lg font-semibold text-gray-900">
                                         Produk Stok Rendah
                                     </h3>
                                 </div>
-                                <div className="p-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {lowStockProducts.map((product) => (
-                                            <div
-                                                key={product.id}
-                                                className="border border-red-200 rounded-lg p-4 bg-red-50"
-                                            >
-                                                <h4 className="font-medium text-gray-900">
-                                                    {product.name}
-                                                </h4>
-                                                <p className="text-sm text-gray-600">
-                                                    SKU: {product.sku}
-                                                </p>
-                                                <p className="text-sm text-red-600">
-                                                    Stok: {product.stock} | Min:{" "}
-                                                    {product.min_stock}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
+                                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {lowStockProducts.map((product) => (
+                                        <div
+                                            key={product.id}
+                                            className="border border-red-200 rounded-lg p-4 bg-red-50"
+                                        >
+                                            <h4 className="font-medium text-gray-900">
+                                                {product.name}
+                                            </h4>
+                                            <p className="text-sm text-gray-600">
+                                                SKU: {product.sku}
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                Stok: {product.stock} | Min:{" "}
+                                                {product.min_stock}
+                                            </p>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
+                        {lowStockProducts.length === 0 &&
+                            stats.totalProducts > 0 && (
+                                <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500">
+                                    <p>Tidak ada produk dengan stok rendah.</p>
+                                </div>
+                            )}
                     </div>
                 )}
 
@@ -946,259 +983,95 @@ function App() {
                                         type="text"
                                         name="search"
                                         placeholder="Cari produk atau SKU..."
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        value={searchTerm}
-                                        onChange={(e) =>
-                                            setSearchTerm(e.target.value)
-                                        }
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                        // Controlled component with state (not implemented yet)
+                                        // value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                                     />
                                 </div>
                             </div>
                             <select
                                 name="categoryFilter"
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={selectedCategory}
-                                onChange={(e) =>
-                                    setSelectedCategory(e.target.value)
-                                }
+                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                // Controlled component with state (not implemented yet)
+                                // value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
                             >
                                 <option value="">Semua Kategori</option>
-                                {categories.map((category) => (
-                                    <option
-                                        key={category.id}
-                                        value={category.id}
-                                    >
-                                        {category.name}
-                                    </option>
-                                ))}
+                                {/* Categories options will be mapped here later */}
                             </select>
                         </div>
 
                         {/* Cart Section - Moved to below filters */}
-                        <div className="bg-white rounded-lg shadow p-6 mb-6">
-                            {" "}
-                            {/* Added margin bottom */}
+                        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-medium text-gray-900">
+                                <h3 className="text-xl font-bold text-gray-900">
                                     Keranjang
                                 </h3>
-                                {cart.length > 0 && (
+                                {stats.cartItems > 0 && (
                                     // Proses Pembayaran button moved here
                                     <button
-                                        onClick={() => {
-                                            const paymentData = {
-                                                method: "Tunai",
-                                                amount: getTotalAmount(),
-                                                change: 0,
-                                                customerName: "Guest",
-                                            };
-                                            processPayment(paymentData);
-                                        }}
-                                        className="bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 mr-2" // Added mr-2 for margin
+                                        // onClick={() => processPayment()} // Will be implemented later
+                                        className="bg-orange-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-orange-700 mr-2"
                                     >
                                         Proses Pembayaran
                                     </button>
                                 )}
-                                {cart.length > 0 && (
+                                {stats.cartItems > 0 && (
                                     <button
-                                        onClick={clearCart}
+                                        // onClick={clearCart} // Will be implemented later
                                         className="text-red-600 hover:text-red-700 text-sm"
                                     >
                                         Clear All
                                     </button>
                                 )}
                             </div>
-                            {cart.length === 0 ? (
-                                <div className="text-center py-8">
+
+                            {stats.cartItems === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
                                     <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                    <p className="text-gray-500">
-                                        Keranjang kosong
+                                    <p>
+                                        Keranjang kosong. Silakan tambahkan
+                                        produk.
                                     </p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {cart.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
-                                        >
-                                            <div className="flex-1">
-                                                <h4 className="font-medium text-gray-900 text-sm">
-                                                    {item.name}
-                                                </h4>
-                                                <p className="text-sm text-gray-600">
-                                                    {formatCurrency(
-                                                        item.sell_price,
-                                                    )}
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            item.id,
-                                                            item.quantity - 1,
-                                                        )
-                                                    }
-                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
-                                                >
-                                                    <Minus className="h-3 w-3" />
-                                                </button>
-                                                <span className="w-8 text-center text-sm">
-                                                    {item.quantity}
-                                                </span>
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            item.id,
-                                                            item.quantity + 1,
-                                                        )
-                                                    }
-                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
-                                                >
-                                                    <Plus className="h-3 w-3" />
-                                                </button>
-                                                <button
-                                                    onClick={() =>
-                                                        removeFromCart(item.id)
-                                                    }
-                                                    className="p-1 rounded-full bg-red-200 hover:bg-red-300 ml-2"
-                                                >
-                                                    <Trash2 className="h-3 w-3 text-red-600" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    <div className="border-t pt-4">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <span className="text-lg font-medium text-gray-900">
-                                                Total:
-                                            </span>
-                                            <span className="text-xl font-bold text-green-600">
-                                                {formatCurrency(
-                                                    getTotalAmount(),
-                                                )}
-                                            </span>
-                                        </div>
-                                        {/* Original Proses Pembayaran button was here, now moved above Clear All */}
+                                    {/* Cart items will be mapped here later */}
+                                    <div className="border border-gray-200 rounded-lg p-3 flex justify-between items-center">
+                                        <p className="font-medium text-gray-800">
+                                            Contoh Produk (placeholder)
+                                        </p>
+                                        <p className="text-gray-600">
+                                            Rp 50.000 x 2
+                                        </p>
+                                    </div>
+                                    <div className="border-t pt-4 flex justify-between items-center">
+                                        <span className="text-lg font-semibold text-gray-900">
+                                            Total:
+                                        </span>
+                                        <span className="text-2xl font-bold text-orange-600">
+                                            Rp 100.000
+                                        </span>
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        {/* Product Grid Section */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filteredProducts.map((product) => {
-                                const itemInCart = cart.find(
-                                    (item) => item.id === product.id,
-                                );
-                                return (
-                                    <div
-                                        key={product.id}
-                                        className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow"
-                                    >
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h3 className="font-medium text-gray-900 text-sm">
-                                                {product.name}
-                                            </h3>
-                                            <span className="text-xs text-gray-500">
-                                                {product.sku}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-600 mb-2">
-                                            {product.categories?.name ||
-                                                "Kategori tidak ditemukan"}
-                                        </p>
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="text-lg font-bold text-green-600">
-                                                {formatCurrency(
-                                                    product.sell_price,
-                                                )}
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                Stok: {product.stock}
-                                            </span>
-                                        </div>
-                                        {itemInCart ? (
-                                            <div className="flex items-center justify-center space-x-2 w-full">
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            product.id,
-                                                            itemInCart.quantity -
-                                                                1,
-                                                        )
-                                                    }
-                                                    className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    disabled={
-                                                        itemInCart.quantity <= 0
-                                                    }
-                                                >
-                                                    <Minus className="h-4 w-4" />
-                                                </button>
-                                                <span className="w-12 text-center font-bold text-lg">
-                                                    {itemInCart.quantity}
-                                                </span>
-                                                <button
-                                                    onClick={() =>
-                                                        updateCartQuantity(
-                                                            product.id,
-                                                            itemInCart.quantity +
-                                                                1,
-                                                        )
-                                                    }
-                                                    className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    disabled={
-                                                        itemInCart.quantity >=
-                                                        product.stock
-                                                    }
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() =>
-                                                    addToCart(product)
-                                                }
-                                                disabled={product.stock === 0}
-                                                className={`w-full py-2 px-4 rounded-lg text-sm font-medium ${
-                                                    product.stock === 0
-                                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                                        : "bg-blue-600 text-white hover:bg-blue-700"
-                                                }`}
-                                            >
-                                                {product.stock === 0
-                                                    ? "Stok Habis"
-                                                    : "Tambah ke Keranjang"}
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                        {/* Product Grid Section (Placeholder for now) */}
+                        <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500 min-h-[200px] flex items-center justify-center">
+                            <p>Daftar Produk akan muncul di sini.</p>
                         </div>
-
-                        {filteredProducts.length === 0 && (
-                            <div className="text-center py-8">
-                                <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-500">
-                                    Tidak ada produk ditemukan
-                                </p>
-                            </div>
-                        )}
                     </div>
                 )}
 
                 {activeTab === "produk" && (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-3xl font-bold text-gray-900">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-3xl font-bold text-gray-800">
                                 Manajemen Produk
                             </h2>
                             <button
                                 onClick={() => openProductForm()}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+                                className="bg-orange-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-orange-700 flex items-center transition-colors duration-200"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Tambah Produk
@@ -1206,7 +1079,7 @@ function App() {
                         </div>
 
                         {/* Product Table */}
-                        <div className="bg-white rounded-lg shadow overflow-hidden">
+                        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
@@ -1241,109 +1114,110 @@ function App() {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {products.map((product) => (
-                                            <tr
-                                                key={product.id}
-                                                className="hover:bg-gray-50"
-                                            >
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {product.name}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {product.sku}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {product.categories?.name ||
-                                                        "Kategori tidak ditemukan"}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {product.suppliers?.name ||
-                                                        "Tidak ada supplier"}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {formatCurrency(
-                                                        product.buy_price,
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {formatCurrency(
-                                                        product.sell_price,
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span
-                                                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                            product.stock <=
-                                                            product.min_stock
-                                                                ? "bg-red-100 text-red-800"
-                                                                : "bg-green-100 text-green-800"
-                                                        }`}
-                                                    >
-                                                        {product.stock}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span
-                                                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                            product.is_active
-                                                                ? "bg-green-100 text-green-800"
-                                                                : "bg-gray-100 text-gray-800"
-                                                        }`}
-                                                    >
-                                                        {product.is_active
-                                                            ? "Aktif"
-                                                            : "Tidak Aktif"}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <button
-                                                        onClick={() =>
-                                                            openProductForm(
-                                                                product,
-                                                            )
-                                                        }
-                                                        className="text-indigo-600 hover:text-indigo-900 mr-3"
-                                                    >
-                                                        <Edit className="h-5 w-5 inline-block" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            deleteProduct(
-                                                                product.id,
-                                                                product.name,
-                                                            )
-                                                        }
-                                                        className="text-red-600 hover:text-red-900"
-                                                    >
-                                                        <Trash2 className="h-5 w-5 inline-block" />
-                                                    </button>
+                                        {products.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan="9"
+                                                    className="px-6 py-4 whitespace-nowrap text-center text-gray-500"
+                                                >
+                                                    Tidak ada produk ditemukan.
                                                 </td>
                                             </tr>
-                                        ))}
+                                        ) : (
+                                            products.map((product) => (
+                                                <tr
+                                                    key={product.id}
+                                                    className="hover:bg-gray-50"
+                                                >
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="text-sm font-medium text-gray-900">
+                                                            {product.name}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {product.sku}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {product.categories
+                                                            ?.name || "N/A"}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {product.suppliers
+                                                            ?.name || "N/A"}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {formatCurrency(
+                                                            product.buy_price,
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {formatCurrency(
+                                                            product.sell_price,
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span
+                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                                product.stock <=
+                                                                product.min_stock
+                                                                    ? "bg-red-100 text-red-800"
+                                                                    : "bg-green-100 text-green-800"
+                                                            }`}
+                                                        >
+                                                            {product.stock}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span
+                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                                product.is_active
+                                                                    ? "bg-green-100 text-green-800"
+                                                                    : "bg-gray-100 text-gray-800"
+                                                            }`}
+                                                        >
+                                                            {product.is_active
+                                                                ? "Aktif"
+                                                                : "Tidak Aktif"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                        <button
+                                                            onClick={() =>
+                                                                openProductForm(
+                                                                    product,
+                                                                )
+                                                            }
+                                                            className="text-indigo-600 hover:text-indigo-900 mr-3"
+                                                        >
+                                                            <Edit className="h-5 w-5 inline-block" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                deleteProduct(
+                                                                    product.id,
+                                                                    product.name,
+                                                                )
+                                                            }
+                                                            className="text-red-600 hover:text-red-900"
+                                                        >
+                                                            <Trash2 className="h-5 w-5 inline-block" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
-
-                        {products.length === 0 && (
-                            <div className="text-center py-8">
-                                <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-500">
-                                    Tidak ada produk ditemukan
-                                </p>
-                            </div>
-                        )}
                     </div>
                 )}
             </main>
 
-            {/* Use createPortal to render modal outside the main App DOM hierarchy */}
+            {/* Product Modal (rendered via createPortal) */}
             {isProductFormOpen &&
                 activeTab === "produk" &&
                 createPortal(
-                    // Menggunakan createPortal langsung
                     <ProductModal
                         product={editingProduct}
                         categories={categories}
@@ -1351,7 +1225,7 @@ function App() {
                         onSave={saveProduct}
                         onClose={closeProductForm}
                     />,
-                    document.body, // Render modal directly into the body
+                    document.body,
                 )}
         </div>
     );
