@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./lib/supabase";
+import imageCompression from "browser-image-compression"; // Import image compression library
+import BarcodeScanner from "./components/BarcodeScanner"; // Import the BarcodeScanner component
 import {
     ShoppingCart,
     Search,
@@ -13,6 +15,7 @@ import {
     DollarSign,
     Edit,
     X,
+    Camera,
 } from "lucide-react";
 
 // --- Reusable ProductModal Component ---
@@ -28,8 +31,12 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
         min_stock: "",
         supplier_id: "",
         is_active: true,
+        image_url: "", // Added for product image URL
     });
     const [errors, setErrors] = useState({});
+    const [imageFile, setImageFile] = useState(null); // State to hold the selected image file
+    const [uploadingImage, setUploadingImage] = useState(false); // State for image upload loading
+    const fileInputRef = useRef(null); // Ref for file input to trigger click
 
     // Populate form data when product prop changes (for editing)
     useEffect(() => {
@@ -47,6 +54,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                 min_stock: product.min_stock || 0,
                 supplier_id: product.supplier_id || "",
                 is_active: product.is_active,
+                image_url: product.image_url || "", // Set existing image URL
             });
         } else {
             // Reset form for new product
@@ -61,9 +69,11 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                 min_stock: 0,
                 supplier_id: "",
                 is_active: true,
+                image_url: "",
             });
         }
         setErrors({}); // Clear errors when modal opens/changes product
+        setImageFile(null); // Clear image file
     }, [product]);
 
     // Handle form input changes
@@ -73,6 +83,97 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
             ...prev,
             [name]: type === "checkbox" ? checked : value,
         }));
+    };
+
+    // Handle image file selection
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setImageFile(file);
+            setFormData((prev) => ({
+                ...prev,
+                image_url: URL.createObjectURL(file),
+            })); // Show local preview
+        }
+    };
+
+    // Upload image to Supabase Storage
+    const uploadProductImage = async () => {
+        if (!imageFile) {
+            alert("Pilih gambar terlebih dahulu!");
+            return null;
+        }
+
+        setUploadingImage(true);
+        let uploadedUrl = null;
+        try {
+            // --- DEBUGGING: Check imageCompression type ---
+            if (process.env.NODE_ENV !== "production") {
+                console.log(
+                    "DEBUG: Type of imageCompression before call:",
+                    typeof imageCompression,
+                );
+                console.log(
+                    "DEBUG: imageCompression itself:",
+                    imageCompression,
+                );
+            }
+            // --- END DEBUGGING ---
+
+            // CRITICAL CHECK: Ensure imageCompression is a function
+            if (typeof imageCompression !== "function") {
+                console.error(
+                    "Error: imageCompression library not loaded correctly or is not a function.",
+                );
+                alert(
+                    "Terjadi masalah dengan library pengolah gambar. Mohon coba lagi atau hubungi dukungan.",
+                );
+                setUploadingImage(false);
+                return null;
+            }
+
+            // Compress image before uploading
+            const options = {
+                maxSizeMB: 0.5, // Max file size in MB (e.g., 500KB)
+                maxWidthOrHeight: 800, // Max width/height
+                useWebWorker: true, // Use web worker for better performance (if supported)
+            };
+
+            const compressedFile = await imageCompression(imageFile, options); // This is the call that was erroring
+
+            const fileExt = imageFile.name.split(".").pop();
+            const fileName = `${Date.now()}.${fileExt}`;
+            const filePath = `product-images/${fileName}`; // Define path in Supabase Storage
+
+            const { data, error } = await supabase.storage
+                .from("product-images") // Your storage bucket name
+                .upload(filePath, compressedFile, {
+                    cacheControl: "3600",
+                    upsert: false,
+                });
+
+            if (error) throw error;
+
+            // Get public URL
+            const { data: publicUrlData } = supabase.storage
+                .from("product-images")
+                .getPublicUrl(filePath);
+
+            uploadedUrl = publicUrlData.publicUrl;
+            setFormData((prev) => ({ ...prev, image_url: uploadedUrl })); // Update form with new URL
+            alert("Gambar berhasil diunggah!");
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            alert("Gagal mengunggah gambar: " + error.message);
+        } finally {
+            setUploadingImage(false);
+        }
+        return uploadedUrl;
+    };
+
+    // Handle button click to trigger file input
+    const triggerFileInput = () => {
+        fileInputRef.current.click();
     };
 
     // Validate form fields
@@ -103,11 +204,25 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
     };
 
     // Handle form submission
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
+        // Made async to await image upload
         e.preventDefault();
         if (!validateForm()) {
             alert("Silakan perbaiki kesalahan pada form.");
             return;
+        }
+
+        let finalImageUrl = formData.image_url;
+        if (imageFile) {
+            // If a new file is selected, upload it
+            const uploaded = await uploadProductImage();
+            if (uploaded) {
+                finalImageUrl = uploaded;
+            } else {
+                // If upload fails, prevent saving product (optional)
+                // alert('Gagal mengunggah gambar, produk tidak disimpan.');
+                // return;
+            }
         }
 
         const parsedData = {
@@ -119,6 +234,7 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
             barcode: formData.barcode === "" ? null : formData.barcode,
             supplier_id:
                 formData.supplier_id === "" ? null : formData.supplier_id,
+            image_url: finalImageUrl || null, // Save the final image URL
         };
 
         onSave(parsedData, product ? product.id : null);
@@ -139,6 +255,48 @@ function ProductModal({ product, categories, suppliers, onSave, onClose }) {
                     {product ? "Edit Produk" : "Tambah Produk Baru"}
                 </h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Image Upload Field */}
+                    <div>
+                        <label
+                            htmlFor="image_upload"
+                            className="block text-sm font-medium text-gray-700"
+                        >
+                            Gambar Produk
+                        </label>
+                        <div className="mt-1 flex items-center space-x-4">
+                            {formData.image_url ? (
+                                <img
+                                    src={formData.image_url}
+                                    alt="Product Preview"
+                                    className="w-24 h-24 object-cover rounded-md border border-gray-300"
+                                />
+                            ) : (
+                                <div className="w-24 h-24 bg-gray-200 rounded-md flex items-center justify-center text-gray-400 text-xs border border-gray-300">
+                                    Tidak Ada Gambar
+                                </div>
+                            )}
+                            <input
+                                type="file"
+                                id="image_upload"
+                                accept="image/*"
+                                onChange={handleImageChange}
+                                ref={fileInputRef}
+                                className="hidden" // Hide the default file input
+                            />
+                            <button
+                                type="button"
+                                onClick={triggerFileInput}
+                                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                                disabled={uploadingImage}
+                            >
+                                {uploadingImage
+                                    ? "Mengunggah..."
+                                    : "Pilih Gambar"}
+                            </button>
+                        </div>
+                    </div>
+                    {/* End Image Upload Field */}
+
                     <div>
                         <label
                             htmlFor="name"
@@ -394,12 +552,14 @@ function App() {
 
     const [isProductFormOpen, setIsProductFormOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false); // State for barcode scanner modal
 
     // --- Effects ---
 
     // Effect to manage body scroll and background dimming based on modal state
     useEffect(() => {
-        if (isProductFormOpen) {
+        if (isProductFormOpen || isBarcodeScannerOpen) {
+            // Check both modals
             document.body.classList.add("modal-open");
             document.body.style.overflow = "hidden";
         } else {
@@ -410,9 +570,9 @@ function App() {
             document.body.classList.remove("modal-open");
             document.body.style.overflow = "";
         };
-    }, [isProductFormOpen]);
+    }, [isProductFormOpen, isBarcodeScannerOpen]); // Added isBarcodeScannerOpen dependency
 
-    // Data Fetching Functions (NOT wrapped in useCallback anymore to simplify dependencies for fetchAllInitialData)
+    // Data Fetching Functions (NOT wrapped in useCallback anymore to simplify dependencies for fetchAndSetAllInitialData)
     // They now return data directly and don't set state
     const fetchProductsData = async () => {
         if (process.env.NODE_ENV !== "production")
@@ -422,7 +582,7 @@ function App() {
                 .from("products")
                 .select(
                     `
-                    id, name, sku, sell_price, stock, min_stock, buy_price, is_active, barcode, category_id,
+                    id, name, sku, sell_price, stock, min_stock, buy_price, is_active, barcode, category_id, image_url,
                     categories(name),
                     supplier_id,
                     suppliers(name)
@@ -817,6 +977,23 @@ function App() {
         }
     };
 
+    // --- Barcode Scanner Handlers ---
+    const openBarcodeScanner = () => {
+        setIsBarcodeScannerOpen(true);
+    };
+
+    const closeBarcodeScanner = () => {
+        setIsBarcodeScannerOpen(false);
+    };
+
+    const handleBarcodeScan = (scannedData) => {
+        if (process.env.NODE_ENV !== "production")
+            console.log("DEBUG: Barcode Scanned:", scannedData);
+        // Automatically search for the scanned product
+        setSearchTerm(scannedData);
+        // Optionally, add the product to cart directly if found (advanced)
+    };
+
     // --- Main App Render ---
     if (loading) {
         return (
@@ -984,19 +1161,38 @@ function App() {
                                         name="search"
                                         placeholder="Cari produk atau SKU..."
                                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                                        // Controlled component with state (not implemented yet)
-                                        // value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                                        value={searchTerm} // Wired up
+                                        onChange={(e) =>
+                                            setSearchTerm(e.target.value)
+                                        } // Wired up
                                     />
+                                    {/* Barcode Scanner Button */}
+                                    <button
+                                        onClick={openBarcodeScanner}
+                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-orange-600 p-1"
+                                        title="Scan Barcode"
+                                    >
+                                        <Camera className="h-5 w-5" />
+                                    </button>
                                 </div>
                             </div>
                             <select
                                 name="categoryFilter"
                                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                                // Controlled component with state (not implemented yet)
-                                // value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+                                value={selectedCategory} // Wired up
+                                onChange={(e) =>
+                                    setSelectedCategory(e.target.value)
+                                } // Wired up
                             >
                                 <option value="">Semua Kategori</option>
-                                {/* Categories options will be mapped here later */}
+                                {categories.map((category) => (
+                                    <option
+                                        key={category.id}
+                                        value={category.id}
+                                    >
+                                        {category.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
@@ -1006,18 +1202,25 @@ function App() {
                                 <h3 className="text-xl font-bold text-gray-900">
                                     Keranjang
                                 </h3>
-                                {stats.cartItems > 0 && (
+                                {cart.length > 0 && (
                                     // Proses Pembayaran button moved here
                                     <button
-                                        // onClick={() => processPayment()} // Will be implemented later
+                                        onClick={() =>
+                                            processPayment({
+                                                method: "Tunai",
+                                                amount: getTotalAmount(),
+                                                change: 0,
+                                                customerName: "Guest",
+                                            })
+                                        } // Wired up
                                         className="bg-orange-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-orange-700 mr-2"
                                     >
                                         Proses Pembayaran
                                     </button>
                                 )}
-                                {stats.cartItems > 0 && (
+                                {cart.length > 0 && (
                                     <button
-                                        // onClick={clearCart} // Will be implemented later
+                                        onClick={clearCart} // Wired up
                                         className="text-red-600 hover:text-red-700 text-sm"
                                     >
                                         Clear All
@@ -1025,7 +1228,7 @@ function App() {
                                 )}
                             </div>
 
-                            {stats.cartItems === 0 ? (
+                            {cart.length === 0 ? (
                                 <div className="text-center py-8 text-gray-500">
                                     <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                                     <p>
@@ -1035,30 +1238,204 @@ function App() {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {/* Cart items will be mapped here later */}
-                                    <div className="border border-gray-200 rounded-lg p-3 flex justify-between items-center">
-                                        <p className="font-medium text-gray-800">
-                                            Contoh Produk (placeholder)
-                                        </p>
-                                        <p className="text-gray-600">
-                                            Rp 50.000 x 2
-                                        </p>
-                                    </div>
-                                    <div className="border-t pt-4 flex justify-between items-center">
-                                        <span className="text-lg font-semibold text-gray-900">
-                                            Total:
-                                        </span>
-                                        <span className="text-2xl font-bold text-orange-600">
-                                            Rp 100.000
-                                        </span>
+                                    {cart.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
+                                        >
+                                            <div className="flex-1">
+                                                <h4 className="font-medium text-gray-900 text-sm">
+                                                    {item.name}
+                                                </h4>
+                                                <p className="text-sm text-gray-600">
+                                                    {formatCurrency(
+                                                        item.sell_price,
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() =>
+                                                        updateCartQuantity(
+                                                            item.id,
+                                                            item.quantity - 1,
+                                                        )
+                                                    }
+                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
+                                                >
+                                                    <Minus className="h-3 w-3" />
+                                                </button>
+                                                <span className="w-8 text-center text-sm">
+                                                    {item.quantity}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        updateCartQuantity(
+                                                            item.id,
+                                                            item.quantity + 1,
+                                                        )
+                                                    }
+                                                    className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"
+                                                >
+                                                    <Plus className="h-3 w-3" />
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        removeFromCart(item.id)
+                                                    }
+                                                    className="p-1 rounded-full bg-red-200 hover:bg-red-300 ml-2"
+                                                >
+                                                    <Trash2 className="h-3 w-3 text-red-600" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div className="border-t pt-4">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <span className="text-lg font-semibold text-gray-900">
+                                                Total:
+                                            </span>
+                                            <span className="text-2xl font-bold text-orange-600">
+                                                {formatCurrency(
+                                                    getTotalAmount(),
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        {/* Product Grid Section (Placeholder for now) */}
-                        <div className="bg-white rounded-lg shadow-sm p-6 text-center text-gray-500 min-h-[200px] flex items-center justify-center">
-                            <p>Daftar Produk akan muncul di sini.</p>
+                        {/* Product Grid Section */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            {filteredProducts.length === 0 ? (
+                                <div className="col-span-full text-center py-8 text-gray-500">
+                                    <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                                    <p>
+                                        Tidak ada produk ditemukan sesuai
+                                        pencarian/filter.
+                                    </p>
+                                </div>
+                            ) : (
+                                filteredProducts.map((product) => {
+                                    const itemInCart = cart.find(
+                                        (item) => item.id === product.id,
+                                    );
+                                    return (
+                                        <div
+                                            key={product.id}
+                                            className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer"
+                                        >
+                                            <div className="flex flex-col items-start mb-2">
+                                                {/* Product Image */}
+                                                <div className="w-full h-24 bg-gray-200 rounded-md mb-2 flex items-center justify-center text-gray-400 text-xs overflow-hidden">
+                                                    {product.image_url ? (
+                                                        <img
+                                                            src={
+                                                                product.image_url
+                                                            }
+                                                            alt={product.name}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <span>
+                                                            Gambar Produk
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h3 className="font-semibold text-gray-900 text-base leading-tight mb-1">
+                                                    {product.name}
+                                                </h3>
+                                                <span className="text-xs text-gray-500 mb-1">
+                                                    SKU: {product.sku}
+                                                </span>
+                                                <span className="text-xs text-gray-600">
+                                                    {product.categories?.name ||
+                                                        "N/A"}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <span className="text-lg font-bold text-green-600">
+                                                    {formatCurrency(
+                                                        product.sell_price,
+                                                    )}
+                                                </span>
+                                                <span
+                                                    className={`text-xs font-medium ${product.stock <= product.min_stock ? "text-red-500" : "text-gray-500"}`}
+                                                >
+                                                    Stok: {product.stock}
+                                                </span>
+                                            </div>
+                                            {product.is_active ? (
+                                                itemInCart ? (
+                                                    <div className="flex items-center justify-center space-x-2 w-full mt-2">
+                                                        <button
+                                                            onClick={() =>
+                                                                updateCartQuantity(
+                                                                    product.id,
+                                                                    itemInCart.quantity -
+                                                                        1,
+                                                                )
+                                                            }
+                                                            className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                            disabled={
+                                                                itemInCart.quantity <=
+                                                                0
+                                                            }
+                                                        >
+                                                            <Minus className="h-4 w-4" />
+                                                        </button>
+                                                        <span className="w-12 text-center font-bold text-lg text-gray-800">
+                                                            {
+                                                                itemInCart.quantity
+                                                            }
+                                                        </span>
+                                                        <button
+                                                            onClick={() =>
+                                                                updateCartQuantity(
+                                                                    product.id,
+                                                                    itemInCart.quantity +
+                                                                        1,
+                                                                )
+                                                            }
+                                                            className="p-2 rounded-full bg-orange-100 hover:bg-orange-200 text-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                            disabled={
+                                                                itemInCart.quantity >=
+                                                                product.stock
+                                                            }
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() =>
+                                                            addToCart(product)
+                                                        }
+                                                        disabled={
+                                                            product.stock === 0
+                                                        }
+                                                        className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                                                            product.stock === 0
+                                                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                                                : "bg-orange-600 text-white hover:bg-orange-700"
+                                                        }`}
+                                                    >
+                                                        {product.stock === 0
+                                                            ? "Stok Habis"
+                                                            : "Tambah ke Keranjang"}
+                                                    </button>
+                                                )
+                                            ) : (
+                                                <div className="w-full py-2 px-4 rounded-lg text-sm font-medium bg-gray-300 text-gray-500 text-center cursor-not-allowed">
+                                                    Produk Tidak Aktif
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 )}
@@ -1087,6 +1464,10 @@ function App() {
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Produk
                                             </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Gambar
+                                            </th>{" "}
+                                            {/* New Image Column */}
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 SKU
                                             </th>
@@ -1117,7 +1498,7 @@ function App() {
                                         {products.length === 0 ? (
                                             <tr>
                                                 <td
-                                                    colSpan="9"
+                                                    colSpan="10"
                                                     className="px-6 py-4 whitespace-nowrap text-center text-gray-500"
                                                 >
                                                     Tidak ada produk ditemukan.
@@ -1134,6 +1515,24 @@ function App() {
                                                             {product.name}
                                                         </div>
                                                     </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        {product.image_url ? (
+                                                            <img
+                                                                src={
+                                                                    product.image_url
+                                                                }
+                                                                alt={
+                                                                    product.name
+                                                                }
+                                                                className="w-16 h-16 object-cover rounded-md"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center text-gray-400 text-xs">
+                                                                No Img
+                                                            </div>
+                                                        )}
+                                                    </td>{" "}
+                                                    {/* Image Column */}
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                         {product.sku}
                                                     </td>
@@ -1224,6 +1623,16 @@ function App() {
                         suppliers={suppliers}
                         onSave={saveProduct}
                         onClose={closeProductForm}
+                    />,
+                    document.body,
+                )}
+
+            {/* Barcode Scanner Modal */}
+            {isBarcodeScannerOpen &&
+                createPortal(
+                    <BarcodeScanner
+                        onScan={handleBarcodeScan}
+                        onClose={closeBarcodeScanner}
                     />,
                     document.body,
                 )}
